@@ -10,6 +10,7 @@ use Galahad\LaravelFauxGenerics\CodeGenerators\FactoryGenerator;
 use Galahad\LaravelFauxGenerics\CodeGenerators\MacrosGenerator;
 use Galahad\LaravelFauxGenerics\CodeGenerators\ModelGenerator;
 use Galahad\LaravelFauxGenerics\Support\ClassNameCollection;
+use Illuminate\Config\Repository;
 use Illuminate\Console\Command;
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Collection;
@@ -25,11 +26,17 @@ class MakeGenericsHelperFile extends Command
 	 */
 	protected $fs;
 	
-	public function __construct(Filesystem $fs)
+	/**
+	 * @var string
+	 */
+	protected $path;
+	
+	public function __construct(Filesystem $fs, Repository $config)
 	{
 		parent::__construct();
 		
 		$this->fs = $fs;
+		$this->path = $config->get('faux-generics.path', base_path('.generics'));
 	}
 	
 	public function handle() : void
@@ -43,11 +50,7 @@ class MakeGenericsHelperFile extends Command
 	
 	protected function writeGenerics() : self
 	{
-		if (!$this->fs->exists(base_path('generics'))) {
-			$this->fs->makeDirectory(base_path('generics'), 0755, true);
-		}
-		
-		$this->fs->cleanDirectory(base_path('generics'));
+		$this->fs->cleanDirectory($this->path);
 		
 		$progress = $this->output->createProgressBar();
 		$progress->setFormat('%bar% %current%/%max% (approx. %estimated%) %message%');
@@ -86,7 +89,7 @@ class MakeGenericsHelperFile extends Command
 				$class_name = $reflection->getName();
 				$class_label = class_basename($class_name);
 				
-				$path = base_path('generics/'.str_replace('\\', '', $class_name).'Generics.php');
+				$path = $this->path.'/'.str_replace('\\', '', $class_name).'Generics.php';
 				
 				$progress->setMessage($class_label);
 				
@@ -117,7 +120,7 @@ class MakeGenericsHelperFile extends Command
 	protected function writeMacros() : self
 	{
 		$generator = new MacrosGenerator();
-		$this->fs->put(base_path('generics/__macros.php'), "<?php /** @noinspection ALL */\n\n{$generator}");
+		$this->fs->put($this->path.'/_macros.php', "<?php /** @noinspection ALL */\n\n{$generator}");
 		
 		$this->info("Wrote macros file.\n");
 		
@@ -173,10 +176,12 @@ class MakeGenericsHelperFile extends Command
 	
 	protected function metadataPath() : string
 	{
-		if ($this->fs->isDirectory(base_path('.phpstorm.meta.php'))) {
-			return base_path('.phpstorm.meta.php/generics.php');
+		$meta_path = base_path('.phpstorm.meta.php');
+		
+		if ($this->fs->isDirectory($meta_path) || !$this->fs->exists($meta_path)) {
+			return $meta_path.'/generics.php';
 		}
 		
-		return base_path('.phpstorm.meta.php');
+		return $meta_path;
 	}
 }
