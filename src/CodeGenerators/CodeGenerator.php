@@ -50,6 +50,11 @@ abstract class CodeGenerator
 	 */
 	protected $model_collection_proxy_class;
 	
+	/**
+	 * @var string
+	 */
+	protected $model_factory_class;
+	
 	public function __construct(ReflectionClass $reflection)
 	{
 		$model_class = $reflection->getName();
@@ -65,6 +70,7 @@ abstract class CodeGenerator
 		$this->model_builder_class = "{$this->namespace}\\{$this->model_base_name}Builder";
 		$this->model_collection_class = "{$this->namespace}\\{$this->model_base_name}Collection";
 		$this->model_collection_proxy_class = "{$this->namespace}\\{$this->model_base_name}CollectionProxy";
+		$this->model_factory_class = "{$this->namespace}\\{$this->model_base_name}FactoryBuilder";
 	}
 	
 	abstract public function __toString();

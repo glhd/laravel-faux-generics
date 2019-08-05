@@ -9,6 +9,6 @@ many of Laravel's fluent and proxy features:
  - [x] Collections (return types)
  - [x] Higher Order Collection Proxies (type-hint on property and method chains)
  - [x] Model Scopes (type-hint on builder, relations, etc)
- - [ ] Factories (type-hint on `factory()` calls)
+ - [x] Factories (type-hint on `factory()` calls)
  - [ ] Paginator
  - [ ] Macros
