@@ -7,6 +7,7 @@ use Galahad\LaravelFauxGenerics\CodeGenerators\CodeGenerator;
 use Galahad\LaravelFauxGenerics\CodeGenerators\CollectionGenerator;
 use Galahad\LaravelFauxGenerics\CodeGenerators\CollectionProxyGenerator;
 use Galahad\LaravelFauxGenerics\CodeGenerators\FactoryGenerator;
+use Galahad\LaravelFauxGenerics\CodeGenerators\MacrosGenerator;
 use Galahad\LaravelFauxGenerics\CodeGenerators\ModelGenerator;
 use Galahad\LaravelFauxGenerics\Support\ClassNameCollection;
 use Illuminate\Console\Command;
@@ -33,15 +34,11 @@ class MakeGenericsHelperFile extends Command
 	
 	public function handle() : void
 	{
-		// TODO:
-		// - Factories
-		// - Paginator
-		// - LengthAwarePaginator
-		// - Relation ?
-		// - Macros
-		
 		$this->writeGenerics();
+		$this->writeMacros();
 		$this->writeMetadata();
+		
+		$this->info("\nDone\n\n");
 	}
 	
 	protected function writeGenerics() : self
@@ -114,7 +111,15 @@ class MakeGenericsHelperFile extends Command
 		$progress->setMessage('');
 		$progress->finish();
 		
-		$this->info("Done\n");
+		return $this;
+	}
+	
+	protected function writeMacros() : self
+	{
+		$generator = new MacrosGenerator();
+		$this->fs->put(base_path('generics/__macros.php'), "<?php /** @noinspection ALL */\n\n{$generator}");
+		
+		$this->info("Wrote macros file.\n");
 		
 		return $this;
 	}
@@ -160,6 +165,8 @@ class MakeGenericsHelperFile extends Command
 		EOM;
 		
 		$this->fs->put($path, $contents);
+		
+		$this->info("Wrote metadata file.\n");
 		
 		return $this;
 	}

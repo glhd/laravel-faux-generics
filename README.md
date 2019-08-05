@@ -11,4 +11,4 @@ many of Laravel's fluent and proxy features:
  - [x] Model Scopes (type-hint on builder, relations, etc)
  - [x] Factories (type-hint on `factory()` calls)
  - [ ] Paginator
- - [ ] Macros
+ - [x] Macros

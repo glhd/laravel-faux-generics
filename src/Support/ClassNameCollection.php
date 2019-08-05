@@ -19,6 +19,14 @@ class ClassNameCollection extends Collection
 			->keys();
 	}
 	
+	public static function allFromAutoloader() : self
+	{
+		$class_map = include base_path('vendor/composer/autoload_classmap.php');
+		
+		return static::make($class_map)
+			->keys();
+	}
+	
 	public function models() : self
 	{
 		return $this->filter(function($class_name) {

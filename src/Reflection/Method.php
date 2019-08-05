@@ -9,6 +9,7 @@ use Barryvdh\Reflection\DocBlock\Context;
 use Barryvdh\Reflection\DocBlock\Tag\ParamTag;
 use Barryvdh\Reflection\DocBlock\Tag\ReturnTag;
 use Closure;
+use Galahad\LaravelFauxGenerics\Concerns\NormalizesDefaultReturnType;
 use Galahad\LaravelFauxGenerics\Concerns\QualifiesTypes;
 use Illuminate\Support\Collection;
 use ReflectionMethod;
@@ -19,7 +20,7 @@ use ReflectionParameter;
  */
 class Method
 {
-	use QualifiesTypes;
+	use QualifiesTypes, NormalizesDefaultReturnType;
 	
 	/**
 	 * @var \ReflectionMethod
@@ -355,23 +356,5 @@ class Method
 	public function __call($name, $arguments)
 	{
 		return $this->method->$name(...$arguments);
-	}
-	
-	protected function normalizeDefaultValue($default) : string
-	{
-		$default = var_export($default, true);
-		
-		// Map null
-		if ('NULL' === $default) {
-			return 'null';
-		}
-		
-		// Normalize arrays
-		$default = preg_replace('/\n\s*/', ' ', $default);
-		$default = preg_replace('/^\s*array\s*\(\s*(.*?)\s*\)\s*$/i', '[$1]', $default);
-		$default = preg_replace('/,\]$/', ']', $default);
-		$default = preg_replace('/^\[0\s*=>\s*(.*)\]$/', '[$1]', $default);
-		
-		return $default;
 	}
 }
