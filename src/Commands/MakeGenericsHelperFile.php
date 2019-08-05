@@ -50,6 +50,10 @@ class MakeGenericsHelperFile extends Command
 	
 	protected function writeGenerics() : self
 	{
+		if (!$this->fs->isDirectory($this->path)) {
+			$this->fs->makeDirectory($this->path, 0755, true);
+		}
+		
 		$this->fs->cleanDirectory($this->path);
 		
 		$progress = $this->output->createProgressBar();
