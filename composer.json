@@ -1,0 +1,48 @@
+{
+	"name": "glhd/laravel-faux-generics",
+	"description": "Faux generics for better type hinting and refactoring in Laravel projects.",
+	"keywords": [
+		"laravel",
+		"generics",
+		"ide-helper"
+	],
+	"authors": [
+		{
+			"name": "Chris Morrell",
+			"homepage": "http://www.cmorrell.com"
+		}
+	],
+	"license": "MIT",
+	"require": {
+		"php": ">=7.3",
+		"illuminate/support": "5.8.*|^6.0"
+	},
+	"require-dev": {
+		"orchestra/testbench": "~3.0",
+		"phpunit/phpunit": "^7.3",
+		"mockery/mockery": "^1.1",
+		"php-coveralls/php-coveralls": "^2.1",
+		"barryvdh/reflection-docblock": "^2.0"
+	},
+	"autoload": {
+		"psr-4": {
+			"Galahad\\LaravelFauxGenerics\\": "src/"
+		}
+	},
+	"autoload-dev": {
+		"classmap": [
+			"tests/TestCase.php"
+		],
+		"psr-4": {
+			"Galahad\\LaravelFauxGenerics\\Tests\\": "tests/"
+		}
+	},
+	"minimum-stability": "stable",
+	"extra": {
+		"laravel": {
+			"providers": [
+				"Galahad\\LaravelFauxGenerics\\Support\\FauxGenericsServiceProvider"
+			]
+		}
+	}
+}
