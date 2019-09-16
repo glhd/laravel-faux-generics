@@ -8,7 +8,6 @@ use Galahad\LaravelFauxGenerics\Reflection\MethodCollection;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Query\Builder as BaseBuilder;
 use ReflectionClass;
 
@@ -41,9 +40,6 @@ class BuilderGenerator extends CodeGenerator
 		$pass_thru_methods = $this->indent($this->passThruBaseBuilderMethods(), 2);
 		$forwarded_methods = $this->indent($this->forwardedBaseBuilderMethods(), 2);
 		
-		$builder_namespace = $this->eloquent_builder_reflection->getNamespaceName();
-		$relation_namespace = implode('\\', array_slice(explode('\\', Relation::class), 0, -1));
-		
 		return <<<EOF
 		namespace {$this->namespace} {
 			class {$this->model_base_name}Builder extends $eloquent_builder_class_name {
@@ -51,16 +47,6 @@ class BuilderGenerator extends CodeGenerator
 				$class_methods
 				$pass_thru_methods
 				$forwarded_methods
-			}
-		}
-		namespace {$builder_namespace} {
-			class Builder {
-				$scope_methods
-			}
-		}
-		namespace {$relation_namespace} {
-			class Relation {
-				$scope_methods
 			}
 		}
 		EOF;
