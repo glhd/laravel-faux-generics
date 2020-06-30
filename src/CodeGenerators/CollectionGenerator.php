@@ -4,6 +4,7 @@ namespace Galahad\LaravelFauxGenerics\CodeGenerators;
 
 use Galahad\LaravelFauxGenerics\Reflection\Method;
 use Galahad\LaravelFauxGenerics\Reflection\MethodCollection;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
@@ -54,6 +55,13 @@ class CollectionGenerator extends CodeGenerator
 		EOF;
 	}
 	
+	public function filename() : string
+	{
+		$path = implode(DIRECTORY_SEPARATOR, explode('\\', $this->reflection->getNamespaceName()));
+		$filename = "{$this->model_base_name}Collection.php";
+		return "{$path}/{$filename}";
+	}
+	
 	protected function proxies() : Collection
 	{
 		return Collection::make($this->collection_reflection->getDefaultProperties()['proxies'])
@@ -66,6 +74,10 @@ class CollectionGenerator extends CodeGenerator
 	{
 		return MethodCollection::reflect($this->collection_reflection)
 			->concretePublicMethods()
+			->filter(function(Method $method) {
+				return $method->returnsType(Model::class)
+					or $method->returnsType(EloquentCollection::class);
+			})
 			->map(function(Method $method) {
 				// Add an extra return type if it's missing for getter-style methods
 				if (in_array($method->getName(), static::$getters, true)) {
@@ -78,11 +90,11 @@ class CollectionGenerator extends CodeGenerator
 							return $this->model_class;
 						}
 						
-						if ('$this' === $type || 'static' === $type || EloquentCollection::class === $type) {
+						if (EloquentCollection::class === $type) {
 							return $this->model_collection_class;
 						}
 					})
-					->export();
+					->exportWithParentCall();
 			})
 			->implode("\n\n");
 	}

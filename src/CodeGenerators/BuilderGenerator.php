@@ -5,10 +5,12 @@ namespace Galahad\LaravelFauxGenerics\CodeGenerators;
 use Closure;
 use Galahad\LaravelFauxGenerics\Reflection\Method;
 use Galahad\LaravelFauxGenerics\Reflection\MethodCollection;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Builder as BaseBuilder;
+use Illuminate\Foundation\Application;
 use ReflectionClass;
 
 class BuilderGenerator extends CodeGenerator
@@ -27,6 +29,8 @@ class BuilderGenerator extends CodeGenerator
 	{
 		parent::__construct($reflection);
 		
+		$this->filename();
+		
 		$this->eloquent_builder_reflection = new ReflectionClass(EloquentBuilder::class);
 		$this->base_builder_reflection = new ReflectionClass(BaseBuilder::class);
 	}
@@ -35,26 +39,37 @@ class BuilderGenerator extends CodeGenerator
 	{
 		$eloquent_builder_class_name = $this->qualifyType(EloquentBuilder::class);
 		
-		$scope_methods = $this->indent($this->scopeMethods(), 2);
-		$class_methods = $this->indent($this->eloquentBuilderMethods(), 2);
-		$pass_thru_methods = $this->indent($this->passThruBaseBuilderMethods(), 2);
-		$forwarded_methods = $this->indent($this->forwardedBaseBuilderMethods(), 2);
+		$scope_methods = $this->indent($this->scopeMethods(), 1);
+		$class_methods = $this->indent($this->eloquentBuilderMethods(), 1);
+		$pass_thru_methods = $this->indent($this->passThruBaseBuilderMethods(), 1);
+		$forwarded_methods = $this->indent($this->forwardedBaseBuilderMethods(), 1);
 		
 		return <<<EOF
-		namespace {$this->namespace} {
-			class {$this->model_base_name}Builder extends $eloquent_builder_class_name {
-				$scope_methods
-				$class_methods
-				$pass_thru_methods
-				$forwarded_methods
-			}
+		namespace {$this->namespace};
+		
+		use $eloquent_builder_class_name;
+		
+		class {$this->model_base_name}Builder extends Builder {
+			$scope_methods
+			$class_methods
+			$pass_thru_methods
+			$forwarded_methods
 		}
+		
 		EOF;
+	}
+	
+	public function filename() : string
+	{
+		$path = implode(DIRECTORY_SEPARATOR, explode('\\', $this->reflection->getNamespaceName()));
+		$filename = "{$this->model_base_name}Builder.php";
+		return "{$path}/{$filename}";
 	}
 	
 	protected function scopeMethods() : string
 	{
 		return MethodCollection::reflect($this->reflection)
+			->withoutStaticMethods()
 			->concretePublicMethods()
 			->filter(function(Method $method) {
 				return 0 === stripos($method->getName(), 'scope');
@@ -64,7 +79,11 @@ class BuilderGenerator extends CodeGenerator
 					->withNewMethodName(lcfirst(substr($method->getName(), 5)))
 					->withOverriddenReturnType("$this->model_builder_class|static")
 					->removeParameter(0)
-					->export();
+					->export(function(Method $method) {
+						$name = $method->getName();
+						$params = $method->exportParameters(true);
+						return "return \$this->callNamedScope('{$name}', [{$params}]);";
+					});
 			})
 			->implode("\n\n");
 	}
@@ -72,11 +91,21 @@ class BuilderGenerator extends CodeGenerator
 	protected function eloquentBuilderMethods() : string
 	{
 		return MethodCollection::reflect($this->eloquent_builder_reflection)
+			->withoutStaticMethods()
 			->concretePublicMethods()
+			->filter(function(Method $method) {
+				return $method->returnsType(Model::class)
+					or $method->returnsType(EloquentCollection::class)
+					or $method->returnsType(EloquentBuilder::class);
+			})
 			->map(function(Method $method) {
 				return $method
 					->withReturnTypeFilter(Closure::fromCallable([$this, 'returnTypeFilter']))
-					->export();
+					->export(function(Method $method) {
+						$name = $method->getName();
+						$params = $method->exportParameters(true);
+						return "return parent::{$name}({$params});";
+					});
 			})
 			->implode("\n\n");
 	}
@@ -86,11 +115,16 @@ class BuilderGenerator extends CodeGenerator
 		$passthru_methods = $this->eloquent_builder_reflection->getDefaultProperties()['passthru'];
 		
 		return MethodCollection::reflect($this->base_builder_reflection)
+			->withoutStaticMethods()
 			->filter(function(Method $method) use ($passthru_methods) {
 				return in_array($method->getName(), $passthru_methods, true);
 			})
 			->map(function(Method $method) {
-				return $method->export();
+				return $method->export(function(Method $method) {
+					$name = $method->getName();
+					$params = $method->exportParameters(true);
+					return "return \$this->toBase()->{$name}({$params});";
+				});
 			})
 			->implode("\n\n");
 	}
@@ -101,6 +135,7 @@ class BuilderGenerator extends CodeGenerator
 		
 		return MethodCollection::reflect($this->base_builder_reflection)
 			->concretePublicMethods()
+			->withoutStaticMethods()
 			->reject(function(Method $method) use ($passthru_methods) {
 				return in_array($method->getName(), $passthru_methods, true)
 					or method_exists($this->model_class, $method->getName())
@@ -109,7 +144,11 @@ class BuilderGenerator extends CodeGenerator
 			->map(function(Method $method) {
 				return $method
 					->withOverriddenReturnType($this->model_builder_class)
-					->export();
+					->export(function(Method $method) {
+						$name = $method->getName();
+						$params = $method->exportParameters(true);
+						return "\$this->query->{$name}({$params});\nreturn \$this;";
+					});
 			})
 			->implode("\n\n");
 	}
@@ -120,7 +159,7 @@ class BuilderGenerator extends CodeGenerator
 			return $this->model_class;
 		}
 		
-		if ('$this' === $type || 'static' === $type || EloquentBuilder::class === $type) {
+		if (BaseBuilder::class === $type || EloquentBuilder::class === $type) {
 			return $this->model_builder_class;
 		}
 		

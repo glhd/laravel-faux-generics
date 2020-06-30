@@ -6,7 +6,6 @@ use Galahad\LaravelFauxGenerics\CodeGenerators\BuilderGenerator;
 use Galahad\LaravelFauxGenerics\CodeGenerators\CodeGenerator;
 use Galahad\LaravelFauxGenerics\CodeGenerators\CollectionGenerator;
 use Galahad\LaravelFauxGenerics\CodeGenerators\CollectionProxyGenerator;
-use Galahad\LaravelFauxGenerics\CodeGenerators\FactoryGenerator;
 use Galahad\LaravelFauxGenerics\CodeGenerators\MacrosGenerator;
 use Galahad\LaravelFauxGenerics\CodeGenerators\ModelGenerator;
 use Galahad\LaravelFauxGenerics\Support\ClassNameCollection;
@@ -43,7 +42,9 @@ class MakeGenericsHelperFile extends Command
 	{
 		$this->writeGenerics();
 		$this->writeMacros();
-		$this->writeMetadata();
+		
+		// FIXME: I think this can go away
+		// $this->writeMetadata();
 		
 		$this->info("\nDone\n\n");
 	}
@@ -64,7 +65,6 @@ class MakeGenericsHelperFile extends Command
 			BuilderGenerator::class,
 			CollectionProxyGenerator::class,
 			CollectionGenerator::class,
-			FactoryGenerator::class,
 			ModelGenerator::class,
 		]);
 		
@@ -93,21 +93,23 @@ class MakeGenericsHelperFile extends Command
 				$class_name = $reflection->getName();
 				$class_label = class_basename($class_name);
 				
-				$path = $this->path.'/'.str_replace('\\', '', $class_name).'Generics.php';
-				
 				$progress->setMessage($class_label);
-				
-				// Empty file
-				$this->fs->put($path, "<?php /** @noinspection ALL */\n\n");
 				
 				try {
 					$generators
 						->map(function($class_name) use ($reflection) {
 							return new $class_name($reflection);
 						})
-						->each(function(CodeGenerator $generator) use ($progress, $path, $class_label) {
+						->each(function(CodeGenerator $generator) use ($progress, $class_label) {
 							$progress->setMessage($class_label.': '.class_basename($generator));
-							$this->fs->append($path, "$generator\n\n");
+							$path = $this->path.DIRECTORY_SEPARATOR.$generator->filename();
+							
+							$directory = dirname($path);
+							if (!$this->fs->isDirectory($directory)) {
+								$this->fs->makeDirectory($directory, 0755, true);
+							}
+							
+							$this->fs->put($path, "<?php\n\n{$generator}\n");
 							$progress->advance();
 						});
 				} finally {
@@ -129,63 +131,5 @@ class MakeGenericsHelperFile extends Command
 		$this->info("Wrote macros file.\n");
 		
 		return $this;
-	}
-	
-	protected function writeMetadata() : self
-	{
-		$factories = FactoryGenerator::builtFactories();
-		
-		if ($factories->isEmpty()) {
-			return $this;
-		}
-		
-		$path = $this->metadataPath();
-		
-		$contents = $this->fs->isReadable($path)
-			? $this->fs->get($path)
-			: '';
-		
-		$start = '// START: Generics Factories';
-		$end = '// END: Generics Factories';
-		
-		$start_pos = strpos($contents, "$start\n");
-		$end_pos = strpos($contents, $end, $start_pos);
-		
-		if (false !== $start_pos && false !== $end_pos) {
-			$contents = substr($contents, 0, $start_pos)
-				.substr($contents, $end_pos + strlen($end) + 1);
-		}
-		
-		$factory_definitions = $factories
-			->map(function($builder, $model) {
-				return "'{$model}' => '{$builder}',";
-			})
-			->implode("\n\t");
-		
-		$contents .= <<<EOM
-		$start
-		override(\\factory(0), map([
-			'' => '@FactoryBuilder',
-			$factory_definitions
-		]));
-		$end
-		EOM;
-		
-		$this->fs->put($path, $contents);
-		
-		$this->info("Wrote metadata file.\n");
-		
-		return $this;
-	}
-	
-	protected function metadataPath() : string
-	{
-		$meta_path = base_path('.phpstorm.meta.php');
-		
-		if ($this->fs->isDirectory($meta_path) || !$this->fs->exists($meta_path)) {
-			return $meta_path.'/generics.php';
-		}
-		
-		return $meta_path;
 	}
 }

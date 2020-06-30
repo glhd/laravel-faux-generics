@@ -74,4 +74,6 @@ abstract class CodeGenerator
 	}
 	
 	abstract public function __toString();
+	
+	abstract public function filename(): string;
 }

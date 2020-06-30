@@ -73,6 +73,13 @@ class MethodCollection extends Collection
 		});
 	}
 	
+	public function withoutStaticMethods() : self
+	{
+		return $this->reject(function(Method $method) {
+			return $method->isStatic();
+		});
+	}
+	
 	public function withoutMutators() : self
 	{
 		return $this->reject(function(Method $method) {

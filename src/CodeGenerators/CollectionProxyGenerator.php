@@ -50,16 +50,28 @@ class CollectionProxyGenerator extends CodeGenerator
 		EOF;
 	}
 	
+	public function filename() : string
+	{
+		$path = implode(DIRECTORY_SEPARATOR, explode('\\', $this->reflection->getNamespaceName()));
+		$filename = "{$this->model_base_name}CollectionProxy.php";
+		return "{$path}/{$filename}";
+	}
+	
 	protected function proxyMethods() : string
 	{
 		return MethodCollection::reflect($this->reflection)
 			->withoutInheritedMethods()
 			->withoutMutators()
+			->withoutStaticMethods()
 			->concretePublicMethods()
 			->map(function(Method $method) {
 				return $method
 					->withOverriddenReturnType($this->return_types)
-					->export();
+					->export(function(Method $method) {
+						$name = $method->getName();
+						$params = $method->exportParameters(true);
+						return "return \$this->__call('{$name}', [{$params}]);";
+					});
 			})
 			->implode("\n\n");
 	}

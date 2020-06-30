@@ -125,9 +125,13 @@ class Method
 		return false;
 	}
 	
-	public function export() : string
+	public function export(Closure $body_generator = null) : string
 	{
 		$exported_code = '';
+		
+		$body = $body_generator
+			? $body_generator($this)
+			: '';
 		
 		// DocBlock
 		if ($this->export_docblock) {
@@ -135,9 +139,18 @@ class Method
 		}
 		
 		// Method Signature
-		$exported_code .= "\n".$this->exportMethodSignature().' {}';
+		$exported_code .= "\n".$this->exportMethodSignature()." {\n{$body}\n}";
 		
 		return $exported_code;
+	}
+	
+	public function exportWithParentCall(): string 
+	{
+		return $this->export(function(self $method) {
+			$name = $method->getName();
+			$params = $method->exportParameters(true);
+			return "return parent::{$name}({$params});";
+		});
 	}
 	
 	public function withDocBlock(bool $export_docblock = true) : self
@@ -208,7 +221,11 @@ class Method
 		
 		$abstract = $this->isAbstract() ? 'abstract ' : '';
 		$static = $this->isStatic() || $this->force_static ? 'static ' : '';
-		$visibility = $this->isPrivate() ? 'private' : $this->isProtected() ? 'protected' : 'public';
+		$visibility = $this->isPrivate() 
+			? 'private' 
+			: ($this->isProtected() 
+				? 'protected' 
+				: 'public');
 		
 		$return = '';
 		if (!$this->return_type_filter && !$this->overridden_return_type && $this->hasReturnType()) {
@@ -220,23 +237,27 @@ class Method
 		return "{$abstract}{$visibility} {$static}function {$name}({$parameters}){$return}";
 	}
 	
-	protected function exportParameters() : string
+	public function exportParameters($for_call_expression = false) : string
 	{
 		return $this->parameters
 			->reject(function(ReflectionParameter $parameter, $index) {
 				return $this->removed_parameters->contains($parameter->getName())
 					or $this->removed_parameters->contains($index);
 			})
-			->map(function(ReflectionParameter $parameter) {
+			->map(function(ReflectionParameter $parameter) use($for_call_expression) {
 				$template = '';
 				
-				if ($parameter->isVariadic()) {
+				if (false === $for_call_expression && $parameter->isVariadic()) {
 					$template .= '...';
 				}
 				
 				$template .= "\${$parameter->getName()}";
 				
-				if ($parameter->isOptional() && $parameter->isDefaultValueAvailable()) {
+				if (
+					false === $for_call_expression 
+					&& $parameter->isOptional() 
+					&& $parameter->isDefaultValueAvailable()
+				) {
 					$template .= ' = '.$this->normalizeDefaultValue($parameter->getDefaultValue());
 				}
 				
