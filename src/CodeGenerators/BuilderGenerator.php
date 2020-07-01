@@ -50,6 +50,11 @@ class BuilderGenerator extends CodeGenerator
 		use $eloquent_builder_class_name;
 		
 		class {$this->model_base_name}Builder extends Builder {
+			/**
+			* @var \\{$this->model_class}
+			*/
+			protected \$model;
+		
 			$scope_methods
 			$class_methods
 			$pass_thru_methods
@@ -82,7 +87,12 @@ class BuilderGenerator extends CodeGenerator
 					->export(function(Method $method) {
 						$name = $method->getName();
 						$params = $method->exportParameters(true);
-						return "return \$this->callNamedScope('{$name}', [{$params}]);";
+						
+						return <<<END_CODE
+						return \$this->callScope(function(...\$parameters) {
+							return \$this->model->{$name}(...\$parameters) ?? \$this;
+						}, [{$params}]);
+						END_CODE;
 					});
 			})
 			->implode("\n\n");

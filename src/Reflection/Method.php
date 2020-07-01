@@ -14,6 +14,7 @@ use Galahad\LaravelFauxGenerics\Concerns\QualifiesTypes;
 use Illuminate\Support\Collection;
 use ReflectionMethod;
 use ReflectionParameter;
+use SplFileObject;
 
 /**
  * @mixin ReflectionMethod
@@ -22,15 +23,9 @@ class Method
 {
 	use QualifiesTypes, NormalizesDefaultReturnType;
 	
-	/**
-	 * @var \ReflectionMethod
-	 */
-	protected $method;
+	protected ReflectionMethod $method;
 	
-	/**
-	 * @var \Barryvdh\Reflection\DocBlock
-	 */
-	protected $docblock;
+	protected ?DocBlock $docblock;
 	
 	/**
 	 * @var \Illuminate\Support\Collection|\Barryvdh\Reflection\DocBlock\Tag\ParamTag[]
@@ -38,54 +33,31 @@ class Method
 	protected $parameter_tags;
 	
 	/**
-	 * @var \Illuminate\Support\Collection|ReflectionParameter{}
+	 * @var \Illuminate\Support\Collection|ReflectionParameter[]
 	 */
 	protected $parameters;
 	
-	/**
-	 * @var \Barryvdh\Reflection\DocBlock\Tag\ReturnTag
-	 */
-	protected $return_tag;
+	protected ?ReturnTag $return_tag;
 	
-	/**
-	 * @var bool
-	 */
-	protected $export_docblock = true;
+	protected bool $export_docblock = true;
 	
-	/**
-	 * @var bool
-	 */
-	protected $include_see_tag = true;
+	protected bool $include_see_tag = true;
 	
-	/**
-	 * @var Closure
-	 */
-	protected $return_type_filter;
+	protected ?Closure $return_type_filter = null;
 	
-	/**
-	 * @var string
-	 */
-	protected $overridden_return_type;
+	protected ?string $overridden_return_type = null;
 	
-	/**
-	 * @var string
-	 */
-	protected $overridden_method_name;
+	protected ?string $overridden_method_name = null;
 	
-	/**
-	 * @var Collection
-	 */
-	protected $added_return_types;
+	protected Collection $added_return_types;
 	
-	/**
-	 * @var Collection
-	 */
-	protected $removed_parameters;
+	protected Collection $removed_parameters;
 	
-	/**
-	 * @var bool
-	 */
-	protected $force_static = false;
+	protected ?string $method_body = null;
+	
+	protected ?string $use_statements = null;
+	
+	protected bool $force_static = false;
 	
 	public function __construct(ReflectionMethod $method)
 	{
@@ -153,6 +125,13 @@ class Method
 		});
 	}
 	
+	public function exportWithCopiedBody(): string
+	{
+		return $this->export(function(self $method) {
+			return $method->getBody();
+		});
+	}
+	
 	public function withDocBlock(bool $export_docblock = true) : self
 	{
 		$this->export_docblock = $export_docblock;
@@ -212,6 +191,68 @@ class Method
 		$this->force_static = true;
 		
 		return $this;
+	}
+	
+	public function getBody(): ?string 
+	{
+		if (null !== $this->method_body) {
+			return $this->method_body;
+		}
+		
+		$filename = $this->getFileName();
+		$start = $this->getStartLine();
+		$end = $this->getEndLine();
+		
+		if (!$filename || false === $start ||  false === $end) {
+			return null;
+		}
+		
+		$this->method_body = '';
+		$file = new SplFileObject($filename);
+		
+		for ($i = $start; $i < $end - 1; $i++) {
+			$file->seek($i);
+			$this->method_body .= $file->current();
+		}
+		
+		// Remove the opening and closing brackets from the method body
+		$this->method_body = preg_replace('/(^\s*{|}\s*$)/', '', $this->method_body);
+		
+		return $this->method_body;
+	}
+	
+	public function qualifyClassName(string $class_name): string 
+	{
+		if (null === $this->use_statements) {
+			$this->use_statements = '';
+			
+			$filename = $this->getFileName();
+			$start = $this->getStartLine();
+			$end = $this->getEndLine();
+			
+			if ($filename && false !== $start && false !== $end) {
+				$file = new SplFileObject($filename);
+				$file->seek(0);
+				do {
+					$line = $file->current();
+					$this->use_statements .= $line;
+					$file->next();
+				} while (
+					false === $file->eof()
+					&& !preg_match('/^\s*class /', $line)
+				);
+			}
+		}
+		
+		$escaped = preg_quote($class_name, '/');
+		$regex = '/^use\s+(?P<full>([A-Za-z0-9_\\\\]+\\\\)?'.$escaped.'|(?P<aliased>[A-Za-z0-9_\\\\]+)\s+as\s+'.$escaped.');$/m';
+		preg_match($regex, $this->use_statements, $matches);
+		
+		if ($matches && isset($matches['full'])) {
+			return $matches['aliased'] ?? $matches['full'];
+		}
+		
+		return $class_name;
 	}
 	
 	protected function exportMethodSignature() : string

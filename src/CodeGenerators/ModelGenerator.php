@@ -63,10 +63,18 @@ class ModelGenerator extends CodeGenerator
 		$eloquent_methods = $this->indent($this->eloquentBuilderMethods(), 1);
 		$relationship_methods = $this->indent($this->relationshipMethods(), 1);
 		
+		$parent = $this->reflection->getParentClass()
+			? $this->reflection->getParentClass()->getName()
+			: Model::class;
+		
+		$parent_basename = class_basename($parent);
+		
 		return <<<EOF
 		namespace {$this->namespace};
 		
-		class {$this->model_base_name} {
+		use $parent;
+		
+		class {$this->model_base_name} extends $parent_basename {
 			$relationship_methods
 			$model_methods
 			$eloquent_methods
@@ -89,34 +97,7 @@ class ModelGenerator extends CodeGenerator
 			->withoutInheritedMethods()
 			->toBase()
 			->map(function(Method $method) {
-				$filename = $method->getFileName();
-				$start = $method->getStartLine();
-				$end = $method->getEndLine();
-				
-				if (!$filename || !$start || !$end) {
-					return;
-				}
-				
-				$use_statements = '';
-				$body = '';
-				
-				$file = new SplFileObject($filename);
-				
-				$file->seek(0);
-				do {
-					$line = $file->current();
-					$use_statements .= $line;
-					$file->next();
-				} while (
-					false === $file->eof()
-					&& !preg_match('/^\s*class /', $line)
-				);
-				
-				for ($i = $start; $i < $end - 1; $i++) {
-					$file->seek($i);
-					$body .= $file->current();
-				}
-				
+				$body = $method->getBody();
 				foreach (static::$relationship_heuristics as $code_fragment => $class_name) {
 					$fragment_position = stripos($body, $code_fragment);
 					if (false !== $fragment_position) {
@@ -125,19 +106,15 @@ class ModelGenerator extends CodeGenerator
 						
 						if (false !== $end) {
 							$related = Str::before(substr($body, $start, $end - $start), '::class');
-							$escaped = preg_quote($related, '/');
-							$regex = '/^use\s+(?P<full>([A-Za-z0-9_\\\\]+\\\\)?'.$escaped.'|(?P<aliased>[A-Za-z0-9_\\\\]+)\s+as\s+'.$escaped.');$/m';
-							preg_match($regex, $use_statements, $matches);
+							$fully_qualified = $method->qualifyClassName($related);
 							
-							if ($matches && isset($matches['full'])) {
-								$related_model = $matches['aliased'] ?? $matches['full'];
-								$related_builder = $this->qualifyType("{$related_model}Builder");
-								$return_type = Relation::class."|$related_builder";
-								return $method
-									->withoutSeeTag()
-									->withOverriddenReturnType($return_type)
-									->export();
-							}
+							$related_builder = $this->qualifyType("{$fully_qualified}Builder");
+							$return_type = Relation::class."|$related_builder";
+							
+							return $method
+								->withoutSeeTag()
+								->withOverriddenReturnType($return_type)
+								->exportWithCopiedBody();
 						}
 					}
 				}
@@ -158,7 +135,7 @@ class ModelGenerator extends CodeGenerator
 			})
 			->map(function(Method $method) {
 				return $method
-					->withoutSeeTag()
+					// ->withoutSeeTag()
 					->withReturnTypeFilter(function(string $type, Method $method) {
 						if (Model::class === $type) {
 							return $this->model_class;
@@ -172,7 +149,7 @@ class ModelGenerator extends CodeGenerator
 							return $this->model_collection_class;
 						}
 					})
-					->export();
+					->exportWithParentCall();
 			})
 			->filter(function(string $code) {
 				return false !== stripos($code, $this->model_class)
